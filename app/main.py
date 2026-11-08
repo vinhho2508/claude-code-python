@@ -7,6 +7,62 @@ from openai import OpenAI
 API_KEY = os.getenv("OPENROUTER_API_KEY")
 BASE_URL = os.getenv("OPENROUTER_BASE_URL", default="https://openrouter.ai/api/v1")
 
+TOOL_READ = {
+    "type": "function",
+    "function": {
+        "name": "Read",
+        "description": "Read a file",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "file_path": {
+                    "type": "string",
+                    "description": "The path to the file to read"
+                }
+            },
+            "required": ["file_path"]
+        }
+    }
+}
+
+def call_llm(client, messages, tools):
+    chat = client.chat.completions.create(
+        model="anthropic/claude-haiku-4.5",
+        messages=messages,
+        tools=tools,
+    )
+    return chat
+   # Sample chat object output:
+    # choices: [
+    #   {
+    #     "message": {
+    #       "role": "assistant",
+    #       "content": null,
+    #       "tool_calls": [
+    #         {
+    #           "id": "tool_call_id_1",
+    #           "function": {
+    #             "name": "Read",
+    #             "arguments": "{\"file_path\": \"/path/to/file.txt\"}"
+    #           }
+    #         }
+    #       ]
+    #     }
+    #   }
+    # ]
+def available_tools():
+    return [
+        TOOL_READ
+    ]
+
+def call_tool(tool_call):
+    if tool_call.function.name == "Read":
+        file_path = json.loads(tool_call.function.arguments)["file_path"]
+        with open(file_path, "r") as f:
+            content = f.read()
+            return content
+    else:
+        raise RuntimeError(f"Unknown tool: {tool_call.function.name}")
 
 def main():
     p = argparse.ArgumentParser()
@@ -18,47 +74,32 @@ def main():
 
     client = OpenAI(api_key=API_KEY, base_url=BASE_URL)
 
-    chat = client.chat.completions.create(
-        model="anthropic/claude-haiku-4.5",
-        messages=[{"role": "user", "content": args.p}],
-        tools=[{
-            "type": "function",
-            "function": {
-                "name": "Read",
-                "description": "Read a file",
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "file_path": {
-                            "type": "string",
-                            "description": "The path to the file to read"
-                        }
-                    },
-                    "required": ["file_path"]
-                }
-            }
-        }],
-    )
+    messages = [{"role": "user", "content": args.p}]
+    tools = available_tools()
+    while True:
+        response = call_llm(client, messages, tools)
 
-    if not chat.choices or len(chat.choices) == 0:
-        raise RuntimeError("no choices in response")
+        if not response.choices or len(response.choices) == 0:
+            raise RuntimeError("no choices in response")
 
-    # Tool calls
-    if chat.choices[0].message.tool_calls:
-        all_tool_calls = chat.choices[0].message.tool_calls
-        for tool_call in all_tool_calls:
-            if tool_call.function.name == "Read":
-                file_path = json.loads(tool_call.function.arguments)["file_path"]
-                with open(file_path, "r") as f:
-                    content = f.read()
-                    print(content)
-                    exit(0)
+        messages.append({
+            "role": "assistant",
+            "content": response.choices[0].message.content,
+            "tool_calls": response.choices[0].message.tool_calls
+        })
 
-    # You can use print statements as follows for debugging, they'll be visible when running tests.
-    print("Logs from your program will appear here!", file=sys.stderr)
+        if not response.choices[0].message.tool_calls:
+            print(response.choices[0].message.content)
+            exit(0)
 
-    # TODO: Uncomment the following line to pass the first stage
-    print(chat.choices[0].message.content)
+        tool_calls = response.choices[0].message.tool_calls
+        for tool_call in tool_calls:
+            tool_result = call_tool(tool_call)
+            messages.append({
+                "role": "tool",
+                "tool_call_id": tool_call.id,
+                "content": tool_result
+            })
 
 
 if __name__ == "__main__":
