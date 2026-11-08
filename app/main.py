@@ -22,19 +22,19 @@ def main():
         model="anthropic/claude-haiku-4.5",
         messages=[{"role": "user", "content": args.p}],
         tools=[{
-            type: "function",
-            function: {
-                name: "Read",
-                description: "Read a file",
-                parameters: {
-                    type: "object",
-                    properties: {
-                        file_path: {
-                            type: "string",
-                            description: "The path to the file to read"
+            "type": "function",
+            "function": {
+                "name": "Read",
+                "description": "Read a file",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "file_path": {
+                            "type": "string",
+                            "description": "The path to the file to read"
                         }
                     },
-                    required: ["file_path"]
+                    "required": ["file_path"]
                 }
             }
         }],
