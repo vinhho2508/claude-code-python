@@ -1,10 +1,9 @@
 from pathlib import Path
-from app.tools.base import Tool
+from app.tools.registry import tool
 import tempfile
 import os
 import shutil
 
-from app.tools.registry import tool
 
 @tool(
         name="Write",

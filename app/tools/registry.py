@@ -1,4 +1,3 @@
-import inspect
 import json
 from dataclasses import dataclass
 from typing import Callable
@@ -13,7 +12,7 @@ class Tool:
     def schema(self) -> dict:
         return {"type": "function",
                 "function": {"name": self.name,
-                             "description": self.descriptionm,
+                             "description": self.description,
                              "parameters": self.parameters}}
     
 _REGISTRY: dict[str, Tool] = {}
