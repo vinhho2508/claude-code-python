@@ -3,6 +3,7 @@ import argparse
 from app.agent import run_agent
 from app.config import Settings
 from app.llm import LLM
+from app.skills import registry
 
 def main() -> None:
     parser = argparse.ArgumentParser()
@@ -10,6 +11,7 @@ def main() -> None:
     args = parser.parse_args()
 
     settings = Settings.from_env()
+    registry.register_skills()
 
     print(run_agent(LLM(settings), args.p))
 
