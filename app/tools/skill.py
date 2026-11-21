@@ -1,5 +1,6 @@
 from pathlib import Path
 from app.tools.registry import tool
+from app.tools.tool_context import ToolContext
 from app.skills.skill import Skill
 from app.skills.registry import get_skill, substitute_arguments
 
@@ -19,11 +20,22 @@ from app.skills.registry import get_skill, substitute_arguments
                 }
             },
             "required": ["name"]
-        }
+        },
+        need_context=True,
 )
-def skill_tool(name: str, args: str = "") -> str:
+def skill_tool(name: str, args: str = "", ctx: ToolContext | None = None) -> str:
     skill = get_skill(name)
     if not skill:
         return f"Could not find the skill {name}"
 
-    return substitute_arguments(skill.prompt, args)
+    body = substitute_arguments(skill.prompt, args)
+    if not skill.fork:
+        return body
+
+    if ctx is None:
+        return f"Error: skill {name} needs a subagent but no context was provided"
+
+    # Lazy import: app.agent imports app.tools, which imports this module at load time.
+    from app.agent import run_subagent
+    answer = run_subagent(ctx.llm, body)
+    return f"Skill {name} ran in a separate context and returned: {answer}"

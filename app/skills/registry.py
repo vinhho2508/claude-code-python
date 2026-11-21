@@ -32,10 +32,11 @@ def parse_skill(path: Path, default_name: str) -> Skill | None:
         return None
 
     return Skill(
-        frontmatter.get('name') or default_name,
-        frontmatter.get('description') or "",
-        path,
-        parts[2].strip())
+        name=frontmatter.get('name') or default_name,
+        description=frontmatter.get('description') or "",
+        path=path,
+        prompt=parts[2].strip(),
+        fork=frontmatter.get('context') == "fork")
 
 def register_skills(skill_dir: str=SKILL_PATH) -> None:
     _REGISTRY.clear()

@@ -1,6 +1,8 @@
 import json
 from dataclasses import dataclass
-from typing import Callable
+from typing import Callable, Iterable
+
+from app.tools.tool_context import ToolContext
 
 @dataclass(frozen=True)
 class Tool:
@@ -8,6 +10,7 @@ class Tool:
     description: str
     parameters: dict
     handler: Callable[..., str]
+    need_context: bool = False
 
     def schema(self) -> dict:
         return {"type": "function",
@@ -27,26 +30,31 @@ _REGISTRY: dict[str, Tool] = {}
 #             required.append(pname)
 #     return {"type": "object", "properties": props, "required": required}
 
-def tool(name: str, description: str, parameters: dict):
+def tool(name: str, description: str, parameters: dict, need_context: bool = False):
     def decorator(func):
         _REGISTRY[name] = Tool(
             name=name,
             description=description or "",
             parameters=parameters,
-            handler=func
+            handler=func,
+            need_context=need_context,
         )
         return func
     return decorator
 
-def schemas() -> list[dict]:
-    return [t.schema() for t in _REGISTRY.values()]
+def schemas(exclude: Iterable[str] = ()) -> list[dict]:
+    excluded = set(exclude)
+    return [t.schema() for t in _REGISTRY.values() if t.name not in excluded]
 
-def run_tool(name: str, arguments_json: str) -> str:
+def run_tool(name: str, arguments_json: str, ctx: ToolContext) -> str:
     t = _REGISTRY.get(name)
     if t is None:
         return f"Error: unknown tool {name!r}"
     try:
         args = json.loads(arguments_json or "{}")
+        if t.need_context:
+            args.pop("ctx", None)  # never let the model supply/spoof the context
+            return t.handler(**args, ctx=ctx)
         return t.handler(**args)
     except json.JSONDecodeError as e:
         return f"Error: invalid JSON arguments: {e}"

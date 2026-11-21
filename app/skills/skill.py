@@ -7,3 +7,4 @@ class Skill:
     description: str
     path: Path
     prompt: str = ""
+    fork: bool = False  # frontmatter `context: fork` → run body in a subagent

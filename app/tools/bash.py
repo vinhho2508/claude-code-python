@@ -4,6 +4,7 @@ import subprocess
 import sys
 
 from app.tools.registry import tool
+from app.tools.tool_context import ToolContext
 
 MAX_OUTPUT_LENGTH = 10_000
 EXECUTION_TIMEOUT = 30
