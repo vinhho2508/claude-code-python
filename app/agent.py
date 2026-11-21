@@ -10,7 +10,9 @@ def run_agent(llm: LLM, prompt: str, max_turns: int=50) -> str:
         messages.append({"role": "system", "content": skills_prompt})
 
     
-    messages.append({"role": "user", "content": expand_skill_command(prompt)})
+    # messages.append({"role": "user", "content": expand_skill_command(prompt)})
+    for content in expand_skill_command(prompt):
+        messages.append({"role": "user", "content": content})
 
     for _ in range(max_turns):
         response = llm.chat(messages, tools.schemas())

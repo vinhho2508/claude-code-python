@@ -41,26 +41,52 @@ def test_format_prompt(tmp_path):
     register_skills(str(tmp_path))
     assert format_skills_prompt().endswith("- alpha: first")
 
-def test_expand_replaces_command_and_keeps_rest(tmp_path):
+def test_expand_arguments_whole(tmp_path):
+    write_skill(tmp_path, "apple", "---\nname: apple\n---\n$ARGUMENTS")
+    register_skills(str(tmp_path))
+    assert expand_skill_command("/apple 4127") == ["4127"]
+
+def test_expand_positional_reversed(tmp_path):
+    write_skill(tmp_path, "grape", "---\nname: grape\n---\n$1 $0")
+    register_skills(str(tmp_path))
+    assert expand_skill_command("/grape mango pear") == ["pear mango"]
+
+def test_expand_indexed_and_multi_digit(tmp_path):
+    write_skill(tmp_path, "x", "---\nname: x\n---\n$ARGUMENTS[1]|$10|$1")
+    register_skills(str(tmp_path))
+    assert expand_skill_command("/x " + " ".join("abcdefghijk")) == ["b|k|b"]
+
+def test_expand_no_args_and_out_of_range_become_empty(tmp_path):
+    write_skill(tmp_path, "x", "---\nname: x\n---\n[$ARGUMENTS][$0][$5]")
+    register_skills(str(tmp_path))
+    assert expand_skill_command("/x") == ["[][][]"]
+
+def test_expand_does_not_resubstitute_inserted_args(tmp_path):
+    write_skill(tmp_path, "x", "---\nname: x\n---\n$ARGUMENTS")
+    register_skills(str(tmp_path))
+    assert expand_skill_command("/x $0 y") == ["$0 y"]
+
+def test_expand_appends_when_body_has_no_placeholder(tmp_path):
     write_skill(tmp_path, "review", "---\nname: review\n---\nREVIEW IT")
     register_skills(str(tmp_path))
-    assert expand_skill_command("please /review app.py") == "please REVIEW IT app.py"
+    assert expand_skill_command("/review app.py") == ["REVIEW IT\n\nARGUMENTS: app.py"]
 
-def test_expand_multiple_commands(tmp_path):
-    write_skill(tmp_path, "a", "---\nname: a\n---\nAAA")
-    write_skill(tmp_path, "b", "---\nname: b\n---\nBBB")
+def test_expand_stacks_until_first_non_skill(tmp_path):
+    write_skill(tmp_path, "a", "---\nname: a\n---\nA-$ARGUMENTS")
+    write_skill(tmp_path, "b", "---\nname: b\n---\nB-$ARGUMENTS")
     register_skills(str(tmp_path))
-    assert expand_skill_command("/a then /b") == "AAA then BBB"
+    assert expand_skill_command("/a /b 4127") == ["A-4127", "B-4127"]
+    assert expand_skill_command("/a 4127 /b") == ["A-4127 /b"]
 
-def test_expand_leaves_unknow_and_paths(tmp_path):
+def test_expand_leaves_unknown_and_paths(tmp_path):
     register_skills(str(tmp_path))
-    assert expand_skill_command("/unknown fix this") == "/unknown fix this"
-    assert expand_skill_command("cat /tmp/x.txt") == "cat /tmp/x.txt"
+    assert expand_skill_command("/unknown fix this") == ["/unknown fix this"]
+    assert expand_skill_command("cat /tmp/x.txt") == ["cat /tmp/x.txt"]
 
 def test_expand_keeps_backslashes(tmp_path):
     write_skill(tmp_path, "win", "---\nname: win\n---\nC:\\path\\d")
     register_skills(str(tmp_path))
-    assert expand_skill_command("/win") == "C:\\path\\d"
+    assert expand_skill_command("/win") == ["C:\\path\\d"]
 
 def test_skips_non_mapping_frontmatter(tmp_path):
     write_skill(tmp_path, "bad", "---\nname:bad\n---\nbody")

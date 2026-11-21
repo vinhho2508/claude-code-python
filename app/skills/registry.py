@@ -53,15 +53,43 @@ def format_skills_prompt() -> str:
     lines = [f"- {v.name}: {v.description}" for v in _REGISTRY.values()]
     return "You have access to the following skills:\n\n" + "\n".join(lines)
 
-SKILL_NAME_COMMAND = re.compile(r"(?<!\S)/([\w-]+)(?!\S)")
+# SKILL_NAME_COMMAND = re.compile(r"(?<!\S)/([\w-]+)(?!\S)")
+_PLACEHOLDER = re.compile(r"\$ARGUMENTS\[(\d+)\]|\$ARGUMENTS|\$(\d+)")
+
+def substitute_arguments(body: str, arguments: str) -> str:
+    args = arguments.split()
+    def replace(match: re.Match) -> str:
+        if match.group(0) == "$ARGUMENTS":
+            return arguments
+        index = int(match.group(1) or match.group(2))
+        return args[index] if index < len(args) else ""
+    
+    result, count = _PLACEHOLDER.subn(replace, body)
+    if arguments and count == 0:
+        result += f"\n\nARGUMENTS: {arguments}"
+    return result
 
 def get_skill(name: str) -> Skill | None:
     return _REGISTRY.get(name)
 
-def expand_skill_command(prompt: str) -> str:
-    def replace(match: re.Match) -> str:
-        skill = get_skill(match.group(1))
+def expand_skill_command(prompt: str) -> list[str]:
+    skills: list[Skill] = []
+    rest = prompt.strip()
+    while rest:
+        head, *tail = rest.split(maxsplit=1)
+        skill = get_skill(head[1:]) if head.startswith("/") else None
         if skill is None:
-            return match.group(0)
-        return skill.prompt
-    return SKILL_NAME_COMMAND.sub(replace, prompt)
+            break
+        skills.append(skill)
+        rest = tail[0] if tail else ""
+    if not skills:
+        return [prompt]
+    return [substitute_arguments(s.prompt, rest) for s in skills]
+
+# def expand_skill_command(prompt: str) -> str:
+#     def replace(match: re.Match) -> str:
+#         skill = get_skill(match.group(1))
+#         if skill is None:
+#             return match.group(0)
+#         return skill.prompt
+#     return SKILL_NAME_COMMAND.sub(replace, prompt)
