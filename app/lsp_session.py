@@ -78,3 +78,13 @@ class LSPSession:
             if "targetUri" in loc else loc
             for loc in result
         ]
+
+    def references(self, file_path, line: int, character: int) -> list[dict]:
+        uri=self.ensure_open(file_path)
+        result = self.client.request("textDocument/references", {
+            "textDocument": { "uri": uri},
+            "position": { "line": line - 1, "character": character - 1},
+            "context": { "includeDeclaration": True}
+        })
+
+        return result or []
