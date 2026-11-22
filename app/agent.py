@@ -2,18 +2,23 @@ from app import tools
 from app.llm import LLM
 from app.skills.registry import format_skills_prompt, expand_skill_command
 
+def _excluded(ctx: tools.ToolContext, extra=()) -> set[str]:
+    excluded = set(extra)
+    if ctx.lsp is None:
+        excluded.add("LSP")
+    return excluded
+
 def run_loop(
-    llm: LLM,
+    ctx: tools.ToolContext,
     messages: list[dict],
     tool_schemas: list[dict] | None = None,
     max_turns: int = 50,
 ) -> str:
     if tool_schemas is None:
-        tool_schemas = tools.schemas()
-    ctx = tools.ToolContext(llm=llm)
+        tool_schemas = tools.schemas(exclude=_excluded(ctx))
 
     for _ in range(max_turns):
-        response = llm.chat(messages, tool_schemas)
+        response = ctx.llm.chat(messages, tool_schemas)
 
         if not response.choices:
             raise RuntimeError("no choices in response")
@@ -33,7 +38,7 @@ def run_loop(
             messages.append({"role": "tool", "tool_call_id": call.id, "content": result })
     raise RuntimeError(f"agent did not finish within {max_turns} turns")
 
-def run_agent(llm: LLM, prompt: str) -> str:
+def run_agent(ctx: tools.ToolContext, prompt: str) -> str:
     messages: list[dict] = []
     skills_prompt = format_skills_prompt()
     if skills_prompt:
@@ -44,13 +49,13 @@ def run_agent(llm: LLM, prompt: str) -> str:
     for content in expand_skill_command(prompt):
         messages.append({"role": "user", "content": content})
 
-    return run_loop(llm, messages)
+    return run_loop(ctx, messages)
 
 
-def run_subagent(llm: LLM, prompt: str) -> str:
+def run_subagent(ctx: tools.ToolContext, prompt: str) -> str:
     """Run the same loop over a fresh conversation holding only `prompt`.
 
     No skills catalog and no Skill tool, so a forked skill can't fork again.
     """
     messages = [{"role": "user", "content": prompt}]
-    return run_loop(llm, messages, tools.schemas(exclude={"Skill"}))
+    return run_loop(ctx, messages, tools.schemas(exclude=_excluded(ctx, {"Skill"})))

@@ -1,6 +1,9 @@
 from app.tools.registry import tool
 
 from enum import Enum
+from app.lsp_session import format_location
+from app.tools.registry import tool
+from app.tools.tool_context import ToolContext
 
 class LSPOperation(Enum):
     GO_TO_DEFINITION = "goToDefinition"
@@ -31,7 +34,24 @@ class LSPOperation(Enum):
             },
         },
         "required": ["operation", "filePath", "line", "character"]
-    }
+    },
+    need_context=True
 )
-def lsp(operation: LSPOperation, filePath: str, line: int, character: int) -> str:
-    return "LSP is not implemented yet"
+def lsp(operation: LSPOperation, filePath: str, line: int, character: int, ctx: ToolContext | None = None) -> str:
+    if ctx is None or ctx.lsp is None:
+        return "Error: LSP is not configured"
+    
+    try:
+        op = LSPOperation(operation)
+    except ValueError:
+        return f"Error: unsupported operation {operation!r}"
+    
+    try:
+        if op is LSPOperation.GO_TO_DEFINITION:
+            locations = ctx.lsp.definition(filePath, line, character)
+    except (OSError, ValueError, RuntimeError) as e:
+        return f"Error: {e}"
+    
+    if not locations:
+        return "No definition found"
+    return "\n".join(f"Defined in {format_location(loc, ctx.lsp.cwd)}" for loc in locations)

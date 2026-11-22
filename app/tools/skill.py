@@ -37,5 +37,5 @@ def skill_tool(name: str, args: str = "", ctx: ToolContext | None = None) -> str
 
     # Lazy import: app.agent imports app.tools, which imports this module at load time.
     from app.agent import run_subagent
-    answer = run_subagent(ctx.llm, body)
+    answer = run_subagent(ctx, body)
     return f"Skill {name} ran in a separate context and returned: {answer}"
