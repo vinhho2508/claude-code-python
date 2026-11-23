@@ -37,14 +37,17 @@ def run_loop(
         for call in message.tool_calls:
             result = tools.run_tool(call.function.name, call.function.arguments, ctx)
             messages.append({"role": "tool", "tool_call_id": call.id, "content": result })
-            if ctx.lsp is not None:
-                try:
-                    feedback = ctx.lsp.take_new_diagnostics()
-                except (OSError, ValueError, RuntimeError) as e:
-                    feedback = None
-                    print(f"[lsp] diagnostics read failed: {e}", file=sys.stderr)
-                if feedback:
-                    messages[-1]["content"] += "\n\n" + feedback
+
+        # Before the next model request: attach new current diagnostics
+        # to the latest tool result.
+        if ctx.lsp is not None:
+            try:
+                feedback = ctx.lsp.take_new_diagnostics()
+            except (OSError, ValueError, RuntimeError) as e:
+                feedback = None
+                print(f"[lsp] diagnostics read failed: {e}", file=sys.stderr)
+            if feedback:
+                messages[-1]["content"] += "\n\n" + feedback
     raise RuntimeError(f"agent did not finish within {max_turns} turns")
 
 def run_agent(ctx: tools.ToolContext, prompt: str) -> str:
