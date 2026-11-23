@@ -30,7 +30,7 @@ Requirements: Python 3.14+ and [uv](https://docs.astral.sh/uv/).
 
 ```sh
 export OPENROUTER_API_KEY=sk-...
-./your_program.sh -p "Create hello.py that prints hello world, then run it"
+./claude.sh -p "Create hello.py that prints hello world, then run it"
 ```
 
 Configuration (environment variables):
