@@ -1,34 +1,64 @@
-[![progress-banner](https://backend.codecrafters.io/progress/claude-code/8cee204a-0665-4c18-b6e8-e6cfc782ad7c)](https://app.codecrafters.io/users/vinhho2508?r=2qF)
+# claude-code-python
 
-This is a starting point for Python solutions to the
-["Build Your own Claude Code" Challenge](https://codecrafters.io/challenges/claude-code).
+A minimal Claude Code–style AI coding agent written from scratch in Python.
+Give it a prompt; it talks to an LLM over an OpenAI-compatible API, calls tools
+to read, write, and run code, and loops until the task is done.
 
-Claude Code is an AI coding assistant that uses Large Language Models (LLMs) to
-understand code and perform actions through tool calls. In this challenge,
-you'll build your own Claude Code from scratch by implementing an LLM-powered
-coding assistant.
+## Features
 
-Along the way you'll learn about HTTP RESTful APIs, OpenAI-compatible tool
-calling, agent loop, and how to integrate multiple tools into an AI assistant.
+- **Agent loop**: sends the conversation and tool schemas to the model, runs every
+  tool call it returns, appends the results, and repeats until the model answers
+  without tool calls (capped at 50 turns).
+- **Tools**, registered with a `@tool` decorator and auto-discovered from `app/tools/`:
+  - `Read`: read a file.
+  - `Write`: atomic file writes (temp file + `os.replace`, keeps the original permissions).
+  - `Bash`: run a shell command with a 30s timeout, process-group kill, and
+    head/tail output truncation.
+  - `LSP`: `goToDefinition` and `findReferences` through a language server.
+  - `Skill`: load a skill's instructions on demand.
+- **Skills**: `.claude/skills/<name>/SKILL.md` files with YAML frontmatter.
+  - Listed for the model in the system prompt.
+  - Invocable as `/name args` slash commands, which can be chained.
+  - Support `$ARGUMENTS`, `$0`, and `$ARGUMENTS[n]` placeholders.
+  - `context: fork` runs the skill in an isolated subagent.
+- **LSP diagnostics feedback**: after the agent writes a file, new language-server
+  errors are attached to the tool result so the model can fix what it broke.
 
-**Note**: If you're viewing this repo on GitHub, head over to
-[codecrafters.io](https://codecrafters.io) to try the challenge.
+## Getting started
 
-# Passing the first stage
-
-The entry point for your `claude-code` implementation is in `app/main.py`. Study
-and uncomment the relevant code, and submit to pass the first stage:
+Requirements: Python 3.14+ and [uv](https://docs.astral.sh/uv/).
 
 ```sh
-codecrafters submit
+export OPENROUTER_API_KEY=sk-...
+./your_program.sh -p "Create hello.py that prints hello world, then run it"
 ```
 
-# Stage 2 & beyond
+Configuration (environment variables):
 
-Note: This section is for stages 2 and beyond.
+| Variable | Default | Purpose |
+|---|---|---|
+| `OPENROUTER_API_KEY` | — (required) | API key |
+| `OPENROUTER_BASE_URL` | `https://openrouter.ai/api/v1` | Any OpenAI-compatible endpoint |
+| `MODEL` | `anthropic/claude-haiku-4.5` | Model ID |
+| `CODECRAFTERS_LSP_URL` | unset | HTTP bridge to a language server; enables the `LSP` tool and diagnostics |
 
-1. Ensure you have `uv` installed locally.
-2. Run `./your_program.sh` to run your program, which is implemented in
-   `app/main.py`.
-3. Run `codecrafters submit` to submit your solution to CodeCrafters. Test
-   output will be streamed to your terminal.
+## Project layout
+
+```
+app/
+├── main.py          # CLI entry point (-p "<prompt>")
+├── agent.py         # agent loop + subagent
+├── llm.py           # OpenAI-compatible chat client
+├── config.py        # settings from env
+├── lsp_client.py    # HTTP client for the LSP bridge
+├── lsp_session.py   # open/sync files, definition/references, diagnostics diffing
+├── tools/           # tool registry + Read, Write, Bash, LSP, Skill
+└── skills/          # SKILL.md discovery, parsing, argument substitution
+tests/               # pytest suite
+```
+
+## Tests
+
+```sh
+uv run pytest
+```
