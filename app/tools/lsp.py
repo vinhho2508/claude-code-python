@@ -34,7 +34,9 @@ def format_references(references: list[dict], cwd: str) -> str:
 
 @tool(
     name="LSP",
-    description=" Returns the file, line, and character where a symbol is defined.",
+    description=" Returns the file, line, and character where a symbol is defined." \
+    "Write results may later be followed by a <new-diagnostics> block: these are " \
+    "language-server errors (in any file) caused by your edits; fix them and re-check.",
     parameters={
         "type": "object",
         "properties": {

@@ -23,17 +23,59 @@ def format_location(location: dict, cwd: str) -> str:
 
 
 class LSPSession:
-    """Per-connection document state on top of the supplied client.
-
-    The server remembers opened documents for the lifetime of the connection,
-    so this state must live exactly as long as the client and be shared by
-    every caller (main agent and subagents).
-    """
 
     def __init__(self, client: LSPClient, cwd: str | None = None):
         self.client = client
         self.cwd = cwd or os.getcwd()
         self.versions: dict[str, int] = {}  # uri -> version; presence == opened
+        self.cursor = 0
+        self.current: dict[str, list[dict]] = {}
+        self.shown: dict[str, set[tuple]] = {}
+
+    @staticmethod
+    def _issue_key(d: dict) -> tuple:
+        start = d["range"]["start"]
+        return (d.get("serverity"), start["line"], start["character"], d["message"])
+
+    def _drain_diagnostics(self) -> None:
+        response = self.client.notifications(after=self.cursor, timeout_ms = 0)
+        self.cursor = response.get("cursor", self.cursor)
+
+        for note in response.get("notifications", []):
+            if note.get("method") != "textDocument/publishDiagnostics":
+                continue
+            params = note["params"]
+            uri = params["uri"]
+            version = params.get("version")
+            if version is not None and version != self.versions.get(uri):
+                continue
+            self.current[uri] = params.get("diagnostics", [])
+
+    def take_new_diagnostics(self) -> str | None:
+        self._drain_diagnostics()
+
+        sections = []
+        for uri, diagnostics in self.current.items():
+            keys = {self._issue_key(d) for d in diagnostics}
+            seen = self.shown.get(uri, set())
+
+            new = [d for d in diagnostics if self._issue_key(d) not in seen]
+            self.shown[uri] = keys
+
+            if not new:
+                continue
+            new.sort(key=lambda d: (d["range"]["start"]["line"], d["range"]["start"]["character"]))
+            lines = [f"{uri_to_relative_path(uri, self.cwd)}:"]
+            for d in new:
+                start = d["range"]["start"]
+                lines.append(f"  [Linee {start['line'] + 1}: {start['character'] + 1}] {d['message']}")
+            sections.append("\n".join(lines))
+        
+        if not sections:
+            return None
+        return ("<new-diagnostics> The following new diagnostic issues were detected:\n\n"
+                + "\n\n".join(sections)
+                + "</new-diagnostics>")
 
     def language_id(self, file_path: str) -> str | None:
         return self.client.extension_to_language.get(Path(file_path).suffix)
