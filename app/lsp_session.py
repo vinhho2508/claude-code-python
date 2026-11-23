@@ -37,6 +37,17 @@ class LSPSession:
 
     def language_id(self, file_path: str) -> str | None:
         return self.client.extension_to_language.get(Path(file_path).suffix)
+    
+    def _open(self, uri: str, language_id: str, text: str) -> None:
+        self.client.notify("textDocument/didOpen", {
+            "textDocument": {
+                "uri": uri,
+                "languageId": language_id,
+                "version": 1,
+                "text": text,
+            }
+        })
+        self.versions[uri] = 1
 
     def ensure_open(self, file_path: str) -> str:
         """Send didOpen once per URI. Returns the URI."""
@@ -49,16 +60,7 @@ class LSPSession:
             raise ValueError(f"unsupported file type: {file_path}")
 
         text = Path(self.cwd, file_path).resolve().read_text(encoding="utf-8")
-        self.client.notify("textDocument/didOpen", {
-            "textDocument": {
-                "uri": uri,
-                "languageId": language_id,
-                "version": 1,
-                "text": text,
-            }
-        })
-        # Only mark as open after the notification succeeded.
-        self.versions[uri] = 1
+        self._open(uri, language_id, text)
         return uri
 
     def definition(self, file_path: str, line: int, character: int) -> list[dict]:
@@ -88,3 +90,21 @@ class LSPSession:
         })
 
         return result or []
+    
+    def sync_saved(self, file_path: str, text: str) -> None:
+        language_id = self.language_id(file_path)
+        if language_id is None:
+            return
+        uri = path_to_uri(file_path, self.cwd)
+        if uri not in self.versions:
+            self._open(uri, language_id, text)
+            return
+        
+        next_version = self.versions[uri] + 1
+
+        self.client.notify("textDocument/didChange", {
+            "textDocument": {"uri": uri, "version": next_version},
+            "contentChanges": [{"text": text}]
+        })
+
+        self.versions[uri] = next_version
